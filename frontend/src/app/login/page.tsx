@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getAuthStatus, startLogin, pollLogin, cancelLogin } from "@/lib/api";
 import { Loader2, CheckCircle, AlertCircle, Globe } from "lucide-react";
+import RemoteBrowser from "@/components/RemoteBrowser";
 
 type LoginState = "checking" | "idle" | "waiting" | "success" | "error";
 
@@ -11,13 +12,17 @@ export default function LoginPage() {
   const router = useRouter();
   const [state, setState] = useState<LoginState>("checking");
   const [errorMsg, setErrorMsg] = useState("");
+  const [loginMode, setLoginMode] = useState<"local" | "remote">("local");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     getAuthStatus()
       .then((status) => {
         if (status.authenticated) router.replace("/");
-        else setState("idle");
+        else {
+          setLoginMode(status.login_mode === "remote" ? "remote" : "local");
+          setState("idle");
+        }
       })
       .catch(() => setState("idle"));
   }, [router]);
@@ -32,6 +37,12 @@ export default function LoginPage() {
   useEffect(() => () => stopPolling(), [stopPolling]);
 
   const handleStartLogin = async () => {
+    if (loginMode === "remote") {
+      // Remote mode: RemoteBrowser component handles everything via WebSocket
+      setState("waiting");
+      return;
+    }
+    // Local mode: existing polling logic
     try {
       setState("waiting");
       const res = await startLogin();
@@ -64,9 +75,21 @@ export default function LoginPage() {
     }
   };
 
+  const handleSuccess = useCallback(() => {
+    setState("success");
+    setTimeout(() => router.replace("/"), 800);
+  }, [router]);
+
+  const handleError = useCallback((msg: string) => {
+    setErrorMsg(msg);
+    setState("error");
+  }, []);
+
   const handleCancel = async () => {
     stopPolling();
-    try { await cancelLogin(); } catch { /* ignore */ }
+    if (loginMode === "local") {
+      try { await cancelLogin(); } catch { /* ignore */ }
+    }
     setState("idle");
   };
 
@@ -83,7 +106,7 @@ export default function LoginPage() {
       {/* Background pattern */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#00000008_1px,transparent_1px),linear-gradient(to_bottom,#00000008_1px,transparent_1px)] bg-[size:24px_24px]" />
 
-      <div className="relative w-full max-w-sm">
+      <div className={`relative w-full ${state === "waiting" && loginMode === "remote" ? "max-w-[1040px]" : "max-w-sm"}`}>
         {state === "idle" && (
           <div className="flex flex-col items-center">
             {/* Logo */}
@@ -126,7 +149,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {state === "waiting" && (
+        {state === "waiting" && loginMode === "local" && (
           <div className="flex flex-col items-center">
             <div className="w-full bg-white rounded-2xl border border-neutral-200 shadow-sm p-8">
               <div className="flex flex-col items-center text-center">
@@ -148,6 +171,26 @@ export default function LoginPage() {
               </div>
 
               <div className="mt-6 pt-5 border-t border-neutral-100">
+                <button
+                  onClick={handleCancel}
+                  className="w-full h-9 rounded-lg text-sm text-neutral-500 transition-colors hover:text-neutral-700 hover:bg-neutral-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {state === "waiting" && loginMode === "remote" && (
+          <div className="flex flex-col items-center">
+            <div className="w-full max-w-[1000px] bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
+              <div className="text-center mb-4">
+                <h2 className="text-lg font-semibold text-neutral-900 tracking-tight">Sign in with Google</h2>
+                <p className="text-sm text-neutral-500 mt-1">Complete login in the browser view below</p>
+              </div>
+              <RemoteBrowser onSuccess={handleSuccess} onError={handleError} />
+              <div className="mt-4 pt-4 border-t border-neutral-100">
                 <button
                   onClick={handleCancel}
                   className="w-full h-9 rounded-lg text-sm text-neutral-500 transition-colors hover:text-neutral-700 hover:bg-neutral-50"

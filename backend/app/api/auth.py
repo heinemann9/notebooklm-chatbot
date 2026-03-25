@@ -1,7 +1,8 @@
 import asyncio
+import base64
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from ..services.auth import (
     LoginSession,
@@ -97,3 +98,111 @@ async def cancel_login():
         return {"status": "no_session"}
     await session.close()
     return {"status": "cancelled"}
+
+
+@router.websocket("/login/ws")
+async def login_websocket(websocket: WebSocket):
+    """WebSocket login for Docker/remote environments. Streams screenshots and relays input."""
+    await websocket.accept()
+
+    # Origin check
+    from ..config import CORS_ORIGINS
+    origin = websocket.headers.get("origin", "")
+    if origin and origin not in CORS_ORIGINS:
+        await websocket.send_json({"type": "error", "message": "Origin not allowed"})
+        await websocket.close(code=4003)
+        return
+
+    status = await check_auth_status()
+    if status["authenticated"]:
+        await websocket.send_json({"type": "status", "authenticated": True, "message": "Already authenticated"})
+        await websocket.close()
+        return
+
+    if get_active_session() is not None:
+        await websocket.send_json({"type": "error", "message": "A login session is already active."})
+        await websocket.close(code=4001)
+        return
+
+    session = LoginSession()
+    screenshot_task = None
+
+    try:
+        await session.start()
+        await websocket.send_json({"type": "status", "authenticated": False, "message": "Browser started."})
+
+        stop_event = asyncio.Event()
+
+        async def screenshot_loop():
+            while not stop_event.is_set():
+                try:
+                    png_bytes = await session.screenshot()
+                    b64 = base64.b64encode(png_bytes).decode("ascii")
+                    await websocket.send_json({"type": "screenshot", "data": b64})
+                    if await session.check_login_complete():
+                        await session.save_and_close()
+                        await reset_client()
+                        await websocket.send_json({"type": "status", "authenticated": True, "message": "Login successful!"})
+                        stop_event.set()
+                        return
+                except Exception as e:
+                    if not stop_event.is_set():
+                        logger.warning("Screenshot loop error: %s", e)
+                    return
+                await asyncio.sleep(0.3)
+
+        screenshot_task = asyncio.create_task(screenshot_loop())
+
+        async def timeout_guard():
+            await asyncio.sleep(LOGIN_TIMEOUT_SECONDS)
+            if not stop_event.is_set():
+                stop_event.set()
+                try:
+                    await websocket.send_json({"type": "error", "message": "Login timed out."})
+                except Exception:
+                    pass
+
+        timeout_task = asyncio.create_task(timeout_guard())
+
+        while not stop_event.is_set():
+            try:
+                msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            except (WebSocketDisconnect, Exception):
+                break
+
+            msg_type = msg.get("type")
+            try:
+                if msg_type == "click":
+                    await session.click(float(msg.get("x", 0)), float(msg.get("y", 0)))
+                elif msg_type == "type":
+                    await session.type_text(str(msg.get("text", "")))
+                elif msg_type == "keypress":
+                    await session.keypress(str(msg.get("key", "")))
+                elif msg_type == "scroll":
+                    await session.scroll(float(msg.get("deltaX", 0)), float(msg.get("deltaY", 0)))
+            except Exception as e:
+                logger.warning("Input handling error: %s", e)
+
+        stop_event.set()
+        timeout_task.cancel()
+
+    except Exception as e:
+        logger.error("Login session error: %s", e)
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
+    finally:
+        if screenshot_task and not screenshot_task.done():
+            screenshot_task.cancel()
+            try:
+                await screenshot_task
+            except (asyncio.CancelledError, Exception):
+                pass
+        await session.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass

@@ -212,6 +212,7 @@ export function getArtifactDownloadUrl(
 export interface AuthStatus {
   authenticated: boolean;
   message?: string;
+  login_mode?: "local" | "remote";
 }
 
 export async function getAuthStatus(): Promise<AuthStatus> {

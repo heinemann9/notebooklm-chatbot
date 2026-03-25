@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import shutil
 
 from notebooklm.paths import get_home_dir, get_storage_path, get_browser_profile_dir
@@ -13,21 +14,36 @@ NOTEBOOKLM_URL = "https://notebooklm.google.com/"
 GOOGLE_ACCOUNTS_URL = "https://accounts.google.com/"
 LOGIN_TIMEOUT_SECONDS = 300  # 5 minutes
 
+VIEWPORT_WIDTH = 1280
+VIEWPORT_HEIGHT = 800
+
+ALLOWED_KEYS = frozenset({
+    "Enter", "Tab", "Backspace", "Delete", "Escape",
+    "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+    "Home", "End", "PageUp", "PageDown", "Space",
+})
+
+
+def _is_docker() -> bool:
+    """Check if running in Docker (Xvfb environment without physical display)."""
+    return os.path.exists("/.dockerenv") or os.environ.get("DISPLAY") == ":99"
+
 
 async def check_auth_status() -> dict:
     """Check if valid authentication exists (fast file check, no network)."""
+    login_mode = "remote" if _is_docker() else "local"
     storage_path = get_storage_path()
     if not storage_path.exists():
-        return {"authenticated": False, "message": "No storage state file found"}
+        return {"authenticated": False, "message": "No storage state file found", "login_mode": login_mode}
     try:
         data = json.loads(storage_path.read_text(encoding="utf-8"))
         cookies = data.get("cookies", [])
         has_sid = any(c.get("name") == "SID" for c in cookies)
         if not has_sid:
-            return {"authenticated": False, "message": "SID cookie missing"}
-        return {"authenticated": True}
+            return {"authenticated": False, "message": "SID cookie missing", "login_mode": login_mode}
+        return {"authenticated": True, "login_mode": login_mode}
     except Exception as e:
-        return {"authenticated": False, "message": f"Invalid storage state: {e}"}
+        return {"authenticated": False, "message": f"Invalid storage state: {e}", "login_mode": login_mode}
 
 
 async def do_logout():
@@ -83,6 +99,7 @@ class LoginSession:
                 "--password-store=basic",
             ],
             ignore_default_args=["--enable-automation"],
+            viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT} if _is_docker() else None,
         )
         self._page = (
             self._context.pages[0]
@@ -127,6 +144,40 @@ class LoginSession:
 
         logger.info("Storage state saved to %s", storage_path)
         await self.close()
+
+    async def screenshot(self) -> bytes:
+        """Take a PNG screenshot of the current page."""
+        if self._closed or self._page is None:
+            raise RuntimeError("Session is closed")
+        return await self._page.screenshot(type="png")
+
+    async def click(self, x: float, y: float):
+        """Click at coordinates, clamped to viewport bounds."""
+        if self._closed or self._page is None:
+            raise RuntimeError("Session is closed")
+        cx = max(0.0, min(x, float(VIEWPORT_WIDTH - 1)))
+        cy = max(0.0, min(y, float(VIEWPORT_HEIGHT - 1)))
+        await self._page.mouse.click(cx, cy)
+
+    async def type_text(self, text: str):
+        """Type text into the focused element (max 1000 chars)."""
+        if self._closed or self._page is None:
+            raise RuntimeError("Session is closed")
+        await self._page.keyboard.type(text[:1000])
+
+    async def keypress(self, key: str):
+        """Press a special key (validated against allowlist)."""
+        if self._closed or self._page is None:
+            raise RuntimeError("Session is closed")
+        if key not in ALLOWED_KEYS:
+            raise ValueError(f"Key not allowed: {key}")
+        await self._page.keyboard.press(key)
+
+    async def scroll(self, delta_x: float, delta_y: float):
+        """Mouse wheel scroll."""
+        if self._closed or self._page is None:
+            raise RuntimeError("Session is closed")
+        await self._page.mouse.wheel(delta_x, delta_y)
 
     async def close(self):
         global _active_session

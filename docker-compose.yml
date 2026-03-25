@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8100:8000"
+    environment:
+      - WIDGET_NOTEBOOK_ID=${WIDGET_NOTEBOOK_ID:-}
+      - WIDGET_TITLE=${WIDGET_TITLE:-Support}
+      - WIDGET_WELCOME_MESSAGE=${WIDGET_WELCOME_MESSAGE:-안녕하세요! 무엇을 도와드릴까요?}
+    volumes:
+      - ./backend/data:/app/data
+      - notebooklm-auth:/root/.notebooklm
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8100
+    ports:
+      - "3100:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  notebooklm-auth:
