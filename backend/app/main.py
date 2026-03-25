@@ -8,7 +8,7 @@ from .config import CORS_ORIGINS
 from .database import close_db
 from .services.notebooklm import close_client
 from .services.auth import close_login_session
-from .api import notebooks, sources, chat, generate, auth
+from .api import notebooks, sources, chat, generate, auth, widget
 
 
 @asynccontextmanager
@@ -38,13 +38,16 @@ app.include_router(notebooks.router)
 app.include_router(sources.router)
 app.include_router(chat.router)
 app.include_router(generate.router)
+app.include_router(widget.router)
 
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     if (
-        path.startswith("/api/auth")
+        request.method == "OPTIONS"
+        or path.startswith("/api/auth")
+        or path.startswith("/api/w/")
         or path == "/api/health"
         or path.startswith("/docs")
         or path.startswith("/openapi")
@@ -52,13 +55,13 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     if path.startswith("/api/"):
-        from .services.auth import check_auth_status
+        from .services.auth import validate_admin_session
 
-        status = await check_auth_status()
-        if not status["authenticated"]:
+        token = request.cookies.get("admin_session")
+        if not validate_admin_session(token):
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Not authenticated. Please login first."},
+                content={"detail": "Admin session required. Please login."},
             )
 
     return await call_next(request)

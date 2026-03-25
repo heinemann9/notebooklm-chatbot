@@ -2,49 +2,90 @@ import asyncio
 import base64
 import logging
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from ..services.auth import (
     LoginSession,
     check_auth_status,
+    clear_admin_session,
+    create_admin_session,
     do_logout,
     get_active_session,
+    validate_admin_session,
     LOGIN_TIMEOUT_SECONDS,
 )
 from ..services.notebooklm import reset_client
+from ..config import ADMIN_PASSWORD
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+class LoginRequest(BaseModel):
+    password: str
+
+
+class SessionRequest(BaseModel):
+    token: str
+
+
+# --- Admin Authentication (password-based) ---
+
+
 @router.get("/status")
-async def auth_status():
-    return await check_auth_status()
+async def auth_status(request: Request):
+    """Check admin session + NotebookLM connection status separately."""
+    token = request.cookies.get("admin_session")
+    admin_ok = validate_admin_session(token)
+    nlm_status = await check_auth_status()
+    return {
+        "authenticated": admin_ok,
+        "notebooklm_authenticated": nlm_status["authenticated"],
+        "login_mode": nlm_status.get("login_mode"),
+    }
+
+
+@router.post("/login")
+async def admin_login(body: LoginRequest):
+    """Verify admin password and create session cookie. No Google login."""
+    if not ADMIN_PASSWORD:
+        raise HTTPException(status_code=500, detail="ADMIN_PASSWORD not configured on server.")
+    if body.password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=403, detail="Invalid admin password.")
+
+    token = create_admin_session()
+    response = JSONResponse(content={"status": "authenticated"})
+    response.set_cookie("admin_session", token, httponly=True, samesite="lax", path="/")
+    return response
 
 
 @router.post("/logout")
 async def logout():
-    await do_logout()
-    return {"status": "logged_out"}
+    """Clear admin session. NotebookLM cookies are preserved."""
+    clear_admin_session()
+    response = JSONResponse(content={"status": "logged_out"})
+    response.delete_cookie("admin_session", path="/")
+    return response
 
 
-@router.post("/login")
-async def start_login():
-    """Start a login session: opens a visible Chromium window on the server.
+# --- NotebookLM Google Login (separate from admin auth) ---
 
-    The user completes Google login in that window.
-    Use GET /api/auth/login/poll to check completion.
-    """
+
+@router.post("/notebooklm/login")
+async def start_notebooklm_login():
+    """Start Google login for NotebookLM. Opens a Chromium browser on the server."""
     if get_active_session() is not None:
         raise HTTPException(
             status_code=409,
             detail="A login session is already active. Complete or cancel it first.",
         )
 
-    status = await check_auth_status()
-    if status["authenticated"]:
-        return {"status": "already_authenticated"}
+    nlm_status = await check_auth_status()
+    if nlm_status["authenticated"]:
+        return {"status": "already_connected"}
 
     session = LoginSession()
     try:
@@ -53,7 +94,6 @@ async def start_login():
         await session.close()
         raise HTTPException(status_code=500, detail=f"Failed to start browser: {e}")
 
-    # Start a background timeout task
     async def _timeout():
         await asyncio.sleep(LOGIN_TIMEOUT_SECONDS)
         sess = get_active_session()
@@ -66,22 +106,21 @@ async def start_login():
     return {"status": "browser_opened", "message": "Complete Google login in the browser window."}
 
 
-@router.get("/login/poll")
-async def poll_login():
-    """Poll whether the login has been completed in the browser window."""
+@router.get("/notebooklm/poll")
+async def poll_notebooklm_login():
+    """Poll whether Google login has been completed."""
     session = get_active_session()
     if session is None:
-        # No active session — maybe already completed or timed out
-        status = await check_auth_status()
-        if status["authenticated"]:
-            return {"status": "authenticated"}
-        return {"status": "no_session", "message": "No active login session. Click Login to start."}
+        nlm_status = await check_auth_status()
+        if nlm_status["authenticated"]:
+            return {"status": "connected"}
+        return {"status": "no_session", "message": "No active login session."}
 
     try:
         if await session.check_login_complete():
             await session.save_and_close()
             await reset_client()
-            return {"status": "authenticated"}
+            return {"status": "connected"}
     except Exception as e:
         logger.warning("Poll check error: %s", e)
         await session.close()
@@ -90,9 +129,9 @@ async def poll_login():
     return {"status": "pending", "message": "Waiting for login in browser window..."}
 
 
-@router.post("/login/cancel")
-async def cancel_login():
-    """Cancel the active login session and close the browser."""
+@router.post("/notebooklm/cancel")
+async def cancel_notebooklm_login():
+    """Cancel the active Google login session."""
     session = get_active_session()
     if session is None:
         return {"status": "no_session"}
@@ -100,12 +139,18 @@ async def cancel_login():
     return {"status": "cancelled"}
 
 
-@router.websocket("/login/ws")
-async def login_websocket(websocket: WebSocket):
+@router.post("/notebooklm/disconnect")
+async def disconnect_notebooklm():
+    """Remove NotebookLM cookies (disconnect Google account)."""
+    await do_logout()
+    return {"status": "disconnected"}
+
+
+@router.websocket("/notebooklm/ws")
+async def notebooklm_login_websocket(websocket: WebSocket):
     """WebSocket login for Docker/remote environments. Streams screenshots and relays input."""
     await websocket.accept()
 
-    # Origin check
     from ..config import CORS_ORIGINS
     origin = websocket.headers.get("origin", "")
     if origin and origin not in CORS_ORIGINS:
@@ -113,9 +158,9 @@ async def login_websocket(websocket: WebSocket):
         await websocket.close(code=4003)
         return
 
-    status = await check_auth_status()
-    if status["authenticated"]:
-        await websocket.send_json({"type": "status", "authenticated": True, "message": "Already authenticated"})
+    nlm_status = await check_auth_status()
+    if nlm_status["authenticated"]:
+        await websocket.send_json({"type": "status", "connected": True, "message": "Already connected"})
         await websocket.close()
         return
 
@@ -129,7 +174,7 @@ async def login_websocket(websocket: WebSocket):
 
     try:
         await session.start()
-        await websocket.send_json({"type": "status", "authenticated": False, "message": "Browser started."})
+        await websocket.send_json({"type": "status", "connected": False, "message": "Browser started."})
 
         stop_event = asyncio.Event()
 
@@ -142,7 +187,7 @@ async def login_websocket(websocket: WebSocket):
                     if await session.check_login_complete():
                         await session.save_and_close()
                         await reset_client()
-                        await websocket.send_json({"type": "status", "authenticated": True, "message": "Login successful!"})
+                        await websocket.send_json({"type": "status", "connected": True, "message": "Connected!"})
                         stop_event.set()
                         return
                 except Exception as e:

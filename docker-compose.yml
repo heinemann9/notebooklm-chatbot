@@ -7,6 +7,7 @@ services:
       - WIDGET_NOTEBOOK_ID=${WIDGET_NOTEBOOK_ID:-}
       - WIDGET_TITLE=${WIDGET_TITLE:-Support}
       - WIDGET_WELCOME_MESSAGE=${WIDGET_WELCOME_MESSAGE:-안녕하세요! 무엇을 도와드릴까요?}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-skqldi25}
     volumes:
       - ./backend/data:/app/data
       - notebooklm-auth:/root/.notebooklm

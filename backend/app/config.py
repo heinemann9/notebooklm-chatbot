@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,3 +15,9 @@ CORS_ORIGINS = [
     "http://localhost:3100",
     "http://127.0.0.1:3100",
 ]
+
+WIDGET_NOTEBOOK_ID = os.environ.get("WIDGET_NOTEBOOK_ID", "")
+WIDGET_TITLE = os.environ.get("WIDGET_TITLE", "Support")
+WIDGET_WELCOME_MESSAGE = os.environ.get("WIDGET_WELCOME_MESSAGE", "안녕하세요! 무엇을 도와드릴까요?")
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")

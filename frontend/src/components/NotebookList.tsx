@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { getNotebooks, createNotebook, deleteNotebook, logout } from "@/lib/api";
+import { getNotebooks, createNotebook, deleteNotebook, logout, getAuthStatus } from "@/lib/api";
 import type { Notebook } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
@@ -21,6 +21,8 @@ import {
   Loader2,
   LogOut,
   FileText,
+  Plug,
+  Unplug,
 } from "lucide-react";
 
 export default function NotebookList() {
@@ -31,6 +33,7 @@ export default function NotebookList() {
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [nlmConnected, setNlmConnected] = useState<boolean | null>(null);
 
   const fetchNotebooks = async () => {
     try {
@@ -46,7 +49,10 @@ export default function NotebookList() {
   };
 
   useEffect(() => {
-    if (authenticated) fetchNotebooks();
+    if (authenticated) {
+      fetchNotebooks();
+      getAuthStatus().then((s) => setNlmConnected(s.notebooklm_authenticated)).catch(() => {});
+    }
   }, [authenticated]);
 
   const handleCreate = async () => {
@@ -112,7 +118,21 @@ export default function NotebookList() {
             </div>
             <span className="text-sm font-semibold text-neutral-900 tracking-tight">NotebookLM</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            {nlmConnected !== null && (
+              <button
+                onClick={() => router.push("/settings")}
+                className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-all ${
+                  nlmConnected
+                    ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                }`}
+                title={nlmConnected ? "NotebookLM connected" : "NotebookLM not connected - click to set up"}
+              >
+                {nlmConnected ? <Plug className="h-3.5 w-3.5" /> : <Unplug className="h-3.5 w-3.5" />}
+                {nlmConnected ? "Connected" : "Not connected"}
+              </button>
+            )}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger
                 render={

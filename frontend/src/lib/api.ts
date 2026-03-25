@@ -56,6 +56,7 @@ async function apiFetch<T>(
   options?: RequestInit
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
   });
@@ -129,7 +130,7 @@ export async function addSourceFile(
 
   const res = await fetch(
     `${API_BASE}/api/notebooks/${notebookId}/sources/file`,
-    { method: "POST", body: formData }
+    { method: "POST", credentials: "include", body: formData }
   );
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -211,38 +212,94 @@ export function getArtifactDownloadUrl(
 
 export interface AuthStatus {
   authenticated: boolean;
-  message?: string;
+  notebooklm_authenticated: boolean;
   login_mode?: "local" | "remote";
 }
 
 export async function getAuthStatus(): Promise<AuthStatus> {
-  const res = await fetch(`${API_BASE}/api/auth/status`);
+  const res = await fetch(`${API_BASE}/api/auth/status`, { credentials: "include" });
   return res.json();
 }
 
-export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/api/auth/logout`, { method: "POST" });
+export async function startLogin(password: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Failed to login" }));
+    throw new Error(body.detail || `Error ${res.status}`);
+  }
 }
 
-interface LoginResponse {
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
+}
+
+// --- NotebookLM Google Login ---
+
+interface NlmLoginResponse {
   status: string;
   message?: string;
 }
 
-export async function startLogin(): Promise<LoginResponse> {
-  const res = await fetch(`${API_BASE}/api/auth/login`, { method: "POST" });
+export async function startNlmLogin(): Promise<NlmLoginResponse> {
+  return apiFetch<NlmLoginResponse>("/api/auth/notebooklm/login", { method: "POST" });
+}
+
+export async function pollNlmLogin(): Promise<NlmLoginResponse> {
+  return apiFetch<NlmLoginResponse>("/api/auth/notebooklm/poll");
+}
+
+export async function cancelNlmLogin(): Promise<void> {
+  await apiFetch<void>("/api/auth/notebooklm/cancel", { method: "POST" });
+}
+
+export async function disconnectNlm(): Promise<void> {
+  await apiFetch<void>("/api/auth/notebooklm/disconnect", { method: "POST" });
+}
+
+// --- Widget (Public) ---
+
+export interface WidgetNotebook {
+  id: string;
+  title: string;
+}
+
+export interface WidgetConfig {
+  title: string;
+  welcome_message: string;
+  notebooks: WidgetNotebook[];
+}
+
+export async function getWidgetConfig(): Promise<WidgetConfig> {
+  const res = await fetch(`${API_BASE}/api/w/config`);
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Failed to start login" }));
-    throw new Error(body.detail || `Error ${res.status}`);
+    const body = await res.text().catch(() => "");
+    throw new Error(`API error ${res.status}: ${body}`);
   }
   return res.json();
 }
 
-export async function pollLogin(): Promise<LoginResponse> {
-  const res = await fetch(`${API_BASE}/api/auth/login/poll`);
+export async function sendWidgetMessage(
+  notebookId: string,
+  question: string,
+  conversationId?: string
+): Promise<{ answer: string; conversation_id: string }> {
+  const res = await fetch(`${API_BASE}/api/w/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      notebook_id: notebookId,
+      question,
+      conversation_id: conversationId ?? null,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`API error ${res.status}: ${body}`);
+  }
   return res.json();
-}
-
-export async function cancelLogin(): Promise<void> {
-  await fetch(`${API_BASE}/api/auth/login/cancel`, { method: "POST" });
 }

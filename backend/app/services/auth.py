@@ -1,7 +1,9 @@
 import asyncio
+import hmac
 import json
 import logging
 import os
+import secrets
 import shutil
 
 from notebooklm.paths import get_home_dir, get_storage_path, get_browser_profile_dir
@@ -9,6 +11,7 @@ from notebooklm.paths import get_home_dir, get_storage_path, get_browser_profile
 logger = logging.getLogger(__name__)
 
 _active_session: "LoginSession | None" = None
+_admin_session_token: str | None = None
 
 NOTEBOOKLM_URL = "https://notebooklm.google.com/"
 GOOGLE_ACCOUNTS_URL = "https://accounts.google.com/"
@@ -27,6 +30,23 @@ ALLOWED_KEYS = frozenset({
 def _is_docker() -> bool:
     """Check if running in Docker (Xvfb environment without physical display)."""
     return os.path.exists("/.dockerenv") or os.environ.get("DISPLAY") == ":99"
+
+
+def create_admin_session() -> str:
+    global _admin_session_token
+    _admin_session_token = secrets.token_urlsafe(32)
+    return _admin_session_token
+
+
+def validate_admin_session(token: str | None) -> bool:
+    if token is None or _admin_session_token is None:
+        return False
+    return hmac.compare_digest(token, _admin_session_token)
+
+
+def clear_admin_session():
+    global _admin_session_token
+    _admin_session_token = None
 
 
 async def check_auth_status() -> dict:

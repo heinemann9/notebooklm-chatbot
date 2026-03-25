@@ -8,11 +8,12 @@ const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 800;
 
 interface RemoteBrowserProps {
-  onSuccess: () => void;
+  wsUrl?: string;
+  onSuccess: (token?: string) => void;
   onError: (msg: string) => void;
 }
 
-export default function RemoteBrowser({ onSuccess, onError }: RemoteBrowserProps) {
+export default function RemoteBrowser({ wsUrl, onSuccess, onError }: RemoteBrowserProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -26,8 +27,8 @@ export default function RemoteBrowser({ onSuccess, onError }: RemoteBrowserProps
   }, []);
 
   useEffect(() => {
-    const wsBase = API_BASE.replace(/^http/, "ws");
-    const ws = new WebSocket(`${wsBase}/api/auth/login/ws`);
+    const defaultWsUrl = API_BASE.replace(/^http/, "ws") + "/api/auth/notebooklm/ws";
+    const ws = new WebSocket(wsUrl || defaultWsUrl);
     wsRef.current = ws;
 
     const img = new Image();
@@ -49,8 +50,8 @@ export default function RemoteBrowser({ onSuccess, onError }: RemoteBrowserProps
         const msg = JSON.parse(event.data);
         if (msg.type === "screenshot" && msg.data) {
           img.src = `data:image/png;base64,${msg.data}`;
-        } else if (msg.type === "status" && msg.authenticated) {
-          onSuccess();
+        } else if (msg.type === "status" && (msg.authenticated || msg.connected)) {
+          onSuccess(msg.session_token ?? undefined);
         } else if (msg.type === "error") {
           onError(msg.message || "Unknown error");
         }
