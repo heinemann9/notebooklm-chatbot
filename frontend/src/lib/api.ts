@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // --- Types (aligned with backend Pydantic models) ---
 
@@ -59,6 +59,12 @@ async function apiFetch<T>(
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
   });
+  if (res.status === 401) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    throw new Error("Authentication required");
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`API error ${res.status}: ${body}`);
@@ -199,4 +205,43 @@ export function getArtifactDownloadUrl(
   artifactId: string
 ): string {
   return `${API_BASE}/api/notebooks/${notebookId}/artifacts/${artifactId}/download`;
+}
+
+// --- Auth ---
+
+export interface AuthStatus {
+  authenticated: boolean;
+  message?: string;
+}
+
+export async function getAuthStatus(): Promise<AuthStatus> {
+  const res = await fetch(`${API_BASE}/api/auth/status`);
+  return res.json();
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/logout`, { method: "POST" });
+}
+
+interface LoginResponse {
+  status: string;
+  message?: string;
+}
+
+export async function startLogin(): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE}/api/auth/login`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Failed to start login" }));
+    throw new Error(body.detail || `Error ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function pollLogin(): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE}/api/auth/login/poll`);
+  return res.json();
+}
+
+export async function cancelLogin(): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/login/cancel`, { method: "POST" });
 }

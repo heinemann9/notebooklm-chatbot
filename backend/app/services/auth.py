@@ -1,0 +1,158 @@
+import asyncio
+import json
+import logging
+import shutil
+
+from notebooklm.paths import get_home_dir, get_storage_path, get_browser_profile_dir
+
+logger = logging.getLogger(__name__)
+
+_active_session: "LoginSession | None" = None
+
+NOTEBOOKLM_URL = "https://notebooklm.google.com/"
+GOOGLE_ACCOUNTS_URL = "https://accounts.google.com/"
+LOGIN_TIMEOUT_SECONDS = 300  # 5 minutes
+
+
+async def check_auth_status() -> dict:
+    """Check if valid authentication exists (fast file check, no network)."""
+    storage_path = get_storage_path()
+    if not storage_path.exists():
+        return {"authenticated": False, "message": "No storage state file found"}
+    try:
+        data = json.loads(storage_path.read_text(encoding="utf-8"))
+        cookies = data.get("cookies", [])
+        has_sid = any(c.get("name") == "SID" for c in cookies)
+        if not has_sid:
+            return {"authenticated": False, "message": "SID cookie missing"}
+        return {"authenticated": True}
+    except Exception as e:
+        return {"authenticated": False, "message": f"Invalid storage state: {e}"}
+
+
+async def do_logout():
+    """Delete storage state and reset the NotebookLM client."""
+    from .notebooklm import reset_client
+
+    storage_path = get_storage_path()
+    if storage_path.exists():
+        storage_path.unlink()
+
+    # Clear browser profile so next login starts fresh (no cached session)
+    browser_profile = get_browser_profile_dir()
+    if browser_profile.exists():
+        shutil.rmtree(browser_profile, ignore_errors=True)
+
+    await reset_client()
+
+
+def get_active_session() -> "LoginSession | None":
+    return _active_session
+
+
+class LoginSession:
+    """Manages a visible Playwright browser for Google login.
+
+    Opens a real Chromium window on the desktop. The user completes
+    Google login in that window. The server polls the URL to detect
+    login completion, then saves cookies and closes the browser.
+    """
+
+    def __init__(self):
+        self._playwright = None
+        self._context = None
+        self._page = None
+        self._closed = False
+
+    async def start(self):
+        global _active_session
+        if _active_session is not None:
+            raise RuntimeError("A login session is already active")
+
+        from playwright.async_api import async_playwright
+
+        self._playwright = await async_playwright().start()
+        browser_profile = get_browser_profile_dir()
+        browser_profile.mkdir(parents=True, exist_ok=True)
+
+        self._context = await self._playwright.chromium.launch_persistent_context(
+            user_data_dir=str(browser_profile),
+            headless=False,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--password-store=basic",
+            ],
+            ignore_default_args=["--enable-automation"],
+        )
+        self._page = (
+            self._context.pages[0]
+            if self._context.pages
+            else await self._context.new_page()
+        )
+        await self._page.goto(NOTEBOOKLM_URL, wait_until="load")
+        _active_session = self
+
+    async def check_login_complete(self) -> bool:
+        if self._closed or self._page is None:
+            return False
+        url = self._page.url
+        return (
+            "notebooklm.google.com" in url
+            and "accounts.google.com" not in url
+            and "signin" not in url.lower()
+        )
+
+    async def save_and_close(self):
+        """Save storage state (mimics CLI flow) and close."""
+        if self._closed or self._context is None:
+            return
+
+        # Navigate to accounts.google.com first to capture regional cookies
+        try:
+            await self._page.goto(GOOGLE_ACCOUNTS_URL, wait_until="load", timeout=10000)
+        except Exception:
+            pass
+
+        # Navigate back to NotebookLM
+        try:
+            await self._page.goto(NOTEBOOKLM_URL, wait_until="load", timeout=15000)
+        except Exception:
+            pass
+
+        # Save storage state
+        storage_path = get_storage_path()
+        get_home_dir(create=True)
+        await self._context.storage_state(path=str(storage_path))
+        storage_path.chmod(0o600)
+
+        logger.info("Storage state saved to %s", storage_path)
+        await self.close()
+
+    async def close(self):
+        global _active_session
+        if self._closed:
+            return
+        self._closed = True
+        _active_session = None
+
+        try:
+            if self._context:
+                await self._context.close()
+        except Exception as e:
+            logger.warning("Error closing browser context: %s", e)
+        try:
+            if self._playwright:
+                await self._playwright.stop()
+        except Exception as e:
+            logger.warning("Error stopping playwright: %s", e)
+
+        self._context = None
+        self._page = None
+        self._playwright = None
+
+
+async def close_login_session():
+    """Cleanup for lifespan shutdown."""
+    global _active_session
+    if _active_session is not None:
+        await _active_session.close()

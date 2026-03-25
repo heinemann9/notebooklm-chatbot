@@ -4,79 +4,69 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ChatWindow from "@/components/ChatWindow";
 import SourceManager from "@/components/SourceManager";
-import { Button } from "@/components/ui/button";
 import { getNotebooks } from "@/lib/api";
 import type { Notebook } from "@/lib/api";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
   ArrowLeft,
   PanelRightOpen,
   PanelRightClose,
-  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 export default function ChatPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { checking, authenticated } = useAuthGuard();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [id, setId] = useState<string | null>(null);
+  const id = params?.id ?? null;
   const [notebook, setNotebook] = useState<Notebook | null>(null);
 
   useEffect(() => {
-    if (params?.id) {
-      setId(params.id);
+    if (authenticated && id) {
       getNotebooks().then((nbs) => {
-        const found = nbs.find((nb: Notebook) => nb.id === params.id);
+        const found = nbs.find((nb: Notebook) => nb.id === id);
         if (found) setNotebook(found);
       });
     }
-  }, [params]);
+  }, [id, authenticated]);
 
-  if (!id) {
+  if (checking || !id) {
     return (
-      <div className="flex items-center justify-center h-screen text-slate-400">
-        <div className="animate-pulse">Loading...</div>
+      <div className="flex items-center justify-center h-screen bg-neutral-50">
+        <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-neutral-50">
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="border-b bg-white px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
+        <header className="border-b border-neutral-200 bg-white/80 backdrop-blur-md px-4 h-12 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <button
               onClick={() => router.push("/")}
-              className="text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+              className="h-7 w-7 rounded-md flex items-center justify-center text-neutral-400 transition-colors hover:text-neutral-600 hover:bg-neutral-100"
             >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-            <div className="h-5 w-px bg-slate-200" />
-            <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
-              </div>
-              <span className="text-sm font-medium text-slate-700 truncate max-w-[300px]">
-                {notebook?.title || "Notebook"}
-              </span>
-            </div>
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="h-4 w-px bg-neutral-200" />
+            <span className="text-sm font-medium text-neutral-700 truncate max-w-[300px]">
+              {notebook?.title || "Notebook"}
+            </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-slate-500 hover:text-slate-700"
+            className="h-7 w-7 rounded-md flex items-center justify-center text-neutral-400 transition-colors hover:text-neutral-600 hover:bg-neutral-100"
           >
             {sidebarOpen ? (
               <PanelRightClose className="h-4 w-4" />
             ) : (
               <PanelRightOpen className="h-4 w-4" />
             )}
-          </Button>
+          </button>
         </header>
 
         {/* Chat */}
@@ -87,7 +77,7 @@ export default function ChatPage() {
 
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-80 border-l bg-white shrink-0 overflow-hidden shadow-sm">
+        <div className="w-80 border-l border-neutral-200 bg-white shrink-0 overflow-hidden">
           <SourceManager notebookId={id} />
         </div>
       )}

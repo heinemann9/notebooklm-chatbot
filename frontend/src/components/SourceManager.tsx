@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
   getSources,
@@ -18,7 +16,6 @@ import {
   FileText,
   Globe,
   Loader2,
-  FolderOpen,
   Plus,
 } from "lucide-react";
 
@@ -96,12 +93,11 @@ export default function SourceManager({ notebookId }: SourceManagerProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-4 border-b">
-        <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-          <FolderOpen className="h-4 w-4 text-blue-500" />
+      <div className="px-4 h-12 flex items-center border-b border-neutral-200">
+        <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
           Sources
           {sources.length > 0 && (
-            <span className="text-xs font-normal text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">
+            <span className="ml-1.5 text-[10px] font-normal text-neutral-400 bg-neutral-100 rounded-full px-1.5 py-px">
               {sources.length}
             </span>
           )}
@@ -109,31 +105,31 @@ export default function SourceManager({ notebookId }: SourceManagerProps) {
       </div>
 
       {/* Add source controls */}
-      <div className="px-4 py-3 space-y-2 border-b bg-slate-50/50">
-        <div className="flex gap-2">
+      <div className="px-4 py-3 space-y-2 border-b border-neutral-100">
+        <div className="flex gap-1.5">
           <div className="relative flex-1">
-            <Link className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <Input
+            <Link className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
+            <input
+              type="text"
               placeholder="Paste URL..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
               disabled={adding}
-              className="pl-8 h-9 text-sm"
+              className="w-full h-8 pl-8 pr-3 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-400 transition-colors disabled:opacity-50"
             />
           </div>
-          <Button
-            size="sm"
+          <button
             onClick={handleAddUrl}
             disabled={adding || !url.trim()}
-            className="h-9 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
+            className="h-8 w-8 rounded-lg bg-neutral-900 text-white flex items-center justify-center shrink-0 transition-all hover:bg-neutral-800 active:scale-95 disabled:opacity-30"
           >
             {adding ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Plus className="h-3.5 w-3.5" />
             )}
-          </Button>
+          </button>
         </div>
 
         <input
@@ -143,61 +139,54 @@ export default function SourceManager({ notebookId }: SourceManagerProps) {
           className="hidden"
           accept=".pdf,.txt,.md,.doc,.docx"
         />
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full h-9 text-xs text-slate-600 border-dashed hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50/50 transition-colors"
+        <button
+          className="w-full h-8 rounded-lg border border-dashed border-neutral-200 text-xs text-neutral-500 flex items-center justify-center gap-1.5 transition-all hover:border-neutral-300 hover:text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
           onClick={() => fileRef.current?.click()}
           disabled={adding}
         >
-          <Upload className="h-3.5 w-3.5 mr-2" />
-          {adding ? "Uploading..." : "Upload File (PDF, TXT, DOC)"}
-        </Button>
+          <Upload className="h-3 w-3" />
+          {adding ? "Uploading..." : "Upload file"}
+        </button>
       </div>
 
       {/* Source list */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-            <Loader2 className="h-5 w-5 animate-spin mb-2" />
-            <p className="text-xs">Loading sources...</p>
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-4 w-4 animate-spin text-neutral-300" />
           </div>
         ) : sources.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
-              <FileText className="h-6 w-6 text-slate-300" />
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="h-8 w-8 rounded-lg bg-neutral-100 flex items-center justify-center mb-2">
+              <FileText className="h-4 w-4 text-neutral-300" />
             </div>
-            <p className="text-xs text-slate-400">No sources added yet.</p>
-            <p className="text-xs text-slate-400 mt-0.5">Add URLs or upload files above.</p>
+            <p className="text-xs text-neutral-400">No sources yet</p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {sources.map((src) => (
               <div
                 key={src.id}
-                className="group flex items-center gap-2.5 rounded-lg border border-slate-100 bg-white px-3 py-2.5 hover:border-slate-200 hover:shadow-sm transition-all"
+                className="group flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-neutral-50"
               >
-                <div className="h-8 w-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
+                <div className="h-7 w-7 rounded-md bg-neutral-100 flex items-center justify-center shrink-0">
                   {src.source_type === "url" ? (
-                    <Globe className="h-4 w-4 text-blue-500" />
+                    <Globe className="h-3.5 w-3.5 text-neutral-500" />
                   ) : (
-                    <FileText className="h-4 w-4 text-amber-500" />
+                    <FileText className="h-3.5 w-3.5 text-neutral-500" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-700 truncate">
+                  <p className="text-sm text-neutral-700 truncate">
                     {src.title || "Untitled"}
                   </p>
-                  <p className="text-xs text-slate-400 capitalize">{src.source_type}</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500 hover:bg-red-50 h-7 w-7 p-0 shrink-0"
+                <button
                   onClick={() => handleDelete(src.id)}
+                  className="h-6 w-6 rounded-md flex items-center justify-center text-neutral-300 opacity-0 group-hover:opacity-100 transition-all hover:text-red-500 hover:bg-red-50 shrink-0"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                  <Trash2 className="h-3 w-3" />
+                </button>
               </div>
             ))}
           </div>

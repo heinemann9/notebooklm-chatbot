@@ -2,13 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -18,20 +11,21 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { getNotebooks, createNotebook, deleteNotebook } from "@/lib/api";
+import { getNotebooks, createNotebook, deleteNotebook, logout } from "@/lib/api";
 import type { Notebook } from "@/lib/api";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
   Plus,
-  BookOpen,
   Trash2,
-  MessageSquare,
+  ArrowRight,
   Loader2,
-  Sparkles,
-  FolderOpen,
+  LogOut,
+  FileText,
 } from "lucide-react";
 
 export default function NotebookList() {
   const router = useRouter();
+  const { checking, authenticated } = useAuthGuard();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
@@ -52,8 +46,8 @@ export default function NotebookList() {
   };
 
   useEffect(() => {
-    fetchNotebooks();
-  }, []);
+    if (authenticated) fetchNotebooks();
+  }, [authenticated]);
 
   const handleCreate = async () => {
     if (!title.trim()) return;
@@ -85,125 +79,148 @@ export default function NotebookList() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace("/login");
+    } catch {
+      toast.error("Failed to logout");
+    }
+  };
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-neutral-50">
+        <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+    <div className="min-h-screen bg-neutral-50">
+      {/* Background pattern */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#00000008_1px,transparent_1px),linear-gradient(to_bottom,#00000008_1px,transparent_1px)] bg-[size:24px_24px]" />
+
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <header className="relative border-b border-neutral-200 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Sparkles className="h-5 w-5 text-white" />
+            <div className="h-8 w-8 rounded-lg bg-neutral-900 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">NotebookLM</h1>
-              <p className="text-xs text-slate-500">AI-powered document chatbot</p>
-            </div>
+            <span className="text-sm font-semibold text-neutral-900 tracking-tight">NotebookLM</span>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger
-              render={
-                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Notebook
-                </Button>
-              }
-            />
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Notebook</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col gap-4 pt-4">
-                <Input
-                  placeholder="Enter notebook title..."
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                  autoFocus
-                />
-                <Button
-                  onClick={handleCreate}
-                  disabled={creating || !title.trim()}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                >
-                  {creating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Notebook"
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-1">
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger
+                render={
+                  <button className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-neutral-900 text-white text-sm font-medium transition-all hover:bg-neutral-800 active:scale-[0.97]">
+                    <Plus className="h-3.5 w-3.5" />
+                    New
+                  </button>
+                }
+              />
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>New notebook</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col gap-3 pt-2">
+                  <Input
+                    placeholder="Notebook name"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                    autoFocus
+                    className="h-10"
+                  />
+                  <button
+                    onClick={handleCreate}
+                    disabled={creating || !title.trim()}
+                    className="h-10 rounded-xl bg-neutral-900 text-sm font-medium text-white transition-all hover:bg-neutral-800 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    {creating ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Creating...
+                      </span>
+                    ) : (
+                      "Create"
+                    )}
+                  </button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <button
+              onClick={handleLogout}
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 transition-colors hover:text-neutral-600 hover:bg-neutral-100"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="relative max-w-5xl mx-auto px-6 py-8">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <Loader2 className="h-8 w-8 animate-spin mb-3" />
-            <p className="text-sm">Loading notebooks...</p>
+          <div className="flex flex-col items-center justify-center py-32 text-neutral-400">
+            <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : notebooks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24">
-            <div className="h-20 w-20 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-              <FolderOpen className="h-10 w-10 text-slate-300" />
+          <div className="flex flex-col items-center justify-center py-32">
+            <div className="h-12 w-12 rounded-2xl bg-neutral-100 flex items-center justify-center mb-4">
+              <FileText className="h-6 w-6 text-neutral-300" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-700 mb-1">No notebooks yet</h3>
-            <p className="text-sm text-slate-400 mb-6">Create your first notebook to get started</p>
-            <Button
+            <p className="text-sm font-medium text-neutral-900 mb-1">No notebooks yet</p>
+            <p className="text-sm text-neutral-400 mb-5">Create one to get started</p>
+            <button
               onClick={() => setDialogOpen(true)}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-neutral-900 text-white text-sm font-medium transition-all hover:bg-neutral-800 active:scale-[0.97]"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Notebook
-            </Button>
+              <Plus className="h-3.5 w-3.5" />
+              New notebook
+            </button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {notebooks.map((nb) => (
-              <Card
+              <button
                 key={nb.id}
-                className="group cursor-pointer border-slate-200/80 bg-white hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-200"
                 onClick={() => router.push(`/chat/${nb.id}`)}
+                className="group relative text-left w-full p-4 rounded-xl border border-neutral-200 bg-white transition-all hover:border-neutral-300 hover:shadow-md hover:shadow-neutral-200/50 active:scale-[0.99]"
               >
-                <CardHeader className="pb-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shrink-0 group-hover:from-blue-200 group-hover:to-indigo-200 transition-colors">
-                      <BookOpen className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500 hover:bg-red-50 h-8 w-8 p-0"
-                      onClick={(e) => handleDelete(nb.id, e)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <CardTitle className="text-base font-semibold text-slate-800 line-clamp-2 mt-2">
-                    {nb.title || "Untitled Notebook"}
-                  </CardTitle>
-                  <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-neutral-900 truncate">
+                      {nb.title || "Untitled"}
+                    </p>
                     {nb.created_at && (
-                      <CardDescription className="text-xs">
+                      <p className="text-xs text-neutral-400 mt-1">
                         {new Date(nb.created_at).toLocaleDateString("ko-KR", {
                           year: "numeric",
                           month: "short",
                           day: "numeric",
                         })}
-                      </CardDescription>
+                      </p>
                     )}
-                    <div className="flex items-center gap-1 text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                      <MessageSquare className="h-3 w-3" />
-                      Chat
-                    </div>
                   </div>
-                </CardHeader>
-              </Card>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span
+                      role="button"
+                      onClick={(e) => handleDelete(nb.id, e)}
+                      className="h-7 w-7 rounded-md flex items-center justify-center text-neutral-300 opacity-0 group-hover:opacity-100 transition-all hover:text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="h-7 w-7 rounded-md flex items-center justify-center text-neutral-300 group-hover:text-neutral-500 transition-colors">
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         )}

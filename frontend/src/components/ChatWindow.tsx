@@ -3,17 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { sendMessage, getChatHistory } from "@/lib/api";
-import type { ChatMessage, ChatResponse } from "@/lib/api";
+import type { ChatMessage } from "@/lib/api";
 import { toast } from "sonner";
 import {
-  Send,
+  ArrowUp,
   Loader2,
-  User,
-  Bot,
-  MessageSquareText,
+  MessageSquare,
 } from "lucide-react";
 
 interface ChatWindowProps {
@@ -96,77 +92,63 @@ export default function ChatWindow({ notebookId }: ChatWindowProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-neutral-50">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6" ref={scrollRef}>
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-2xl mx-auto space-y-5">
           {messages.length === 0 && !sending && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mb-4">
-                <MessageSquareText className="h-8 w-8 text-blue-500" />
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="h-10 w-10 rounded-xl bg-neutral-100 flex items-center justify-center mb-4">
+                <MessageSquare className="h-5 w-5 text-neutral-300" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-700 mb-1">
+              <p className="text-sm font-medium text-neutral-900 mb-1">
                 Start a conversation
-              </h3>
-              <p className="text-sm text-slate-400 max-w-sm">
-                Ask questions about your sources. The AI will answer based on the documents you&apos;ve added.
+              </p>
+              <p className="text-xs text-neutral-400 max-w-xs">
+                Ask questions about your sources. The AI will respond based on the documents you&apos;ve added.
               </p>
             </div>
           )}
 
           {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
-            >
-              {/* Avatar */}
-              <div
-                className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
-                  msg.role === "user"
-                    ? "bg-gradient-to-br from-blue-600 to-indigo-600"
-                    : "bg-gradient-to-br from-emerald-500 to-teal-500"
-                }`}
-              >
-                {msg.role === "user" ? (
-                  <User className="h-4 w-4 text-white" />
-                ) : (
-                  <Bot className="h-4 w-4 text-white" />
-                )}
-              </div>
-
-              {/* Message bubble */}
-              <div
-                className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tr-md whitespace-pre-wrap"
-                    : "bg-white text-slate-700 border border-slate-200 shadow-sm rounded-tl-md"
-                }`}
-              >
-                {msg.role === "assistant" ? (
-                  <div className="prose prose-sm prose-slate max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-slate-800 prose-strong:text-slate-800 prose-code:text-indigo-600 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-lg prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-blockquote:border-blue-300 prose-blockquote:text-slate-600">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
+            <div key={i}>
+              {msg.role === "user" ? (
+                <div className="flex justify-end">
+                  <div className="max-w-[75%] rounded-2xl rounded-br-md bg-neutral-900 text-white px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
+                    {msg.content}
                   </div>
-                ) : (
-                  msg.content
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <div className="h-6 w-6 rounded-md bg-neutral-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-neutral-500">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <div className="max-w-[85%] text-sm leading-relaxed text-neutral-700">
+                    <div className="prose prose-sm prose-neutral max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-neutral-900 prose-strong:text-neutral-900 prose-code:text-neutral-800 prose-code:bg-neutral-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-neutral-900 prose-pre:text-neutral-100 prose-pre:rounded-lg prose-a:text-neutral-900 prose-a:underline prose-a:underline-offset-2 prose-blockquote:border-neutral-300 prose-blockquote:text-neutral-500">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 
           {/* Typing indicator */}
           {sending && (
             <div className="flex gap-3">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shrink-0">
-                <Bot className="h-4 w-4 text-white" />
+              <div className="h-6 w-6 rounded-md bg-neutral-100 flex items-center justify-center shrink-0 mt-0.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-neutral-500">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
-              <div className="bg-white border border-slate-200 shadow-sm rounded-2xl rounded-tl-md px-4 py-3">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <div className="h-2 w-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <div className="h-2 w-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "300ms" }} />
-                </div>
+              <div className="flex items-center gap-1 px-3 py-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="h-1.5 w-1.5 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="h-1.5 w-1.5 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
           )}
@@ -174,33 +156,32 @@ export default function ChatWindow({ notebookId }: ChatWindowProps) {
       </div>
 
       {/* Input area */}
-      <div className="border-t bg-white px-4 py-4">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-end gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-            <Textarea
+      <div className="border-t border-neutral-200 bg-white px-4 py-3">
+        <div className="max-w-2xl mx-auto">
+          <div className="relative flex items-end gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 focus-within:border-neutral-400 focus-within:bg-white transition-all">
+            <textarea
               ref={textareaRef}
-              placeholder="Type your message..."
+              placeholder="Message..."
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               rows={1}
-              className="flex-1 resize-none border-0 bg-transparent p-0 text-sm focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-h-[24px] max-h-[160px] placeholder:text-slate-400 shadow-none outline-none"
+              className="flex-1 resize-none bg-transparent text-sm text-neutral-900 placeholder:text-neutral-400 outline-none min-h-[20px] max-h-[160px] leading-5"
             />
-            <Button
+            <button
               onClick={handleSend}
               disabled={sending || !input.trim()}
-              size="sm"
-              className="h-9 w-9 p-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 disabled:opacity-40 disabled:shadow-none transition-all shrink-0"
+              className="h-7 w-7 rounded-lg bg-neutral-900 text-white flex items-center justify-center shrink-0 transition-all hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:hover:bg-neutral-900"
             >
               {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Send className="h-4 w-4" />
+                <ArrowUp className="h-3.5 w-3.5" />
               )}
-            </Button>
+            </button>
           </div>
-          <p className="text-xs text-slate-400 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line
+          <p className="text-[10px] text-neutral-400 mt-1.5 text-center">
+            Enter to send · Shift+Enter for new line
           </p>
         </div>
       </div>

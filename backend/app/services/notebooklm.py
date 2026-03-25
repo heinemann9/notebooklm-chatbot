@@ -32,6 +32,11 @@ async def close_client():
         _client = None
 
 
+async def reset_client():
+    """Close client so next get_client() reloads from fresh storage."""
+    await close_client()
+
+
 # --- Notebooks ---
 
 async def list_notebooks() -> list[Notebook]:
