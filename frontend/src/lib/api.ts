@@ -96,6 +96,15 @@ export async function deleteNotebook(id: string): Promise<void> {
 
 // --- Sources ---
 
+export interface UploadTask {
+  task_id: string;
+  notebook_id: string;
+  filename: string;
+  status: "pending" | "uploading" | "processing" | "done" | "error";
+  error: string | null;
+  source: Source | null;
+}
+
 export async function getSources(notebookId: string): Promise<Source[]> {
   return apiFetch<Source[]>(`/api/notebooks/${notebookId}/sources`);
 }
@@ -103,10 +112,20 @@ export async function getSources(notebookId: string): Promise<Source[]> {
 export async function addSourceUrl(
   notebookId: string,
   url: string
-): Promise<Source> {
-  return apiFetch<Source>(`/api/notebooks/${notebookId}/sources/url`, {
+): Promise<UploadTask> {
+  return apiFetch<UploadTask>(`/api/notebooks/${notebookId}/sources/url`, {
     method: "POST",
     body: JSON.stringify({ url }),
+  });
+}
+
+export async function getUploadTasks(notebookId: string): Promise<UploadTask[]> {
+  return apiFetch<UploadTask[]>(`/api/notebooks/${notebookId}/sources/tasks`);
+}
+
+export async function cancelUploadTask(notebookId: string, taskId: string): Promise<void> {
+  await apiFetch(`/api/notebooks/${notebookId}/sources/tasks/${taskId}/cancel`, {
+    method: "POST",
   });
 }
 
@@ -124,7 +143,7 @@ export async function addSourceText(
 export async function addSourceFile(
   notebookId: string,
   file: File
-): Promise<Source> {
+): Promise<UploadTask> {
   const formData = new FormData();
   formData.append("file", file);
 

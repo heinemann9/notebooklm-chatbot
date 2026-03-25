@@ -6,12 +6,15 @@ import os
 import secrets
 import shutil
 
+from pathlib import Path
+
 from notebooklm.paths import get_home_dir, get_storage_path, get_browser_profile_dir
 
 logger = logging.getLogger(__name__)
 
 _active_session: "LoginSession | None" = None
 _admin_session_token: str | None = None
+_SESSION_FILE = Path(__file__).resolve().parent.parent.parent / "data" / ".admin_session"
 
 NOTEBOOKLM_URL = "https://notebooklm.google.com/"
 GOOGLE_ACCOUNTS_URL = "https://accounts.google.com/"
@@ -32,9 +35,25 @@ def _is_docker() -> bool:
     return os.path.exists("/.dockerenv") or os.environ.get("DISPLAY") == ":99"
 
 
+def _load_session_token():
+    """Load session token from file on startup."""
+    global _admin_session_token
+    if _SESSION_FILE.exists():
+        try:
+            _admin_session_token = _SESSION_FILE.read_text().strip()
+        except Exception:
+            _admin_session_token = None
+
+
 def create_admin_session() -> str:
     global _admin_session_token
     _admin_session_token = secrets.token_urlsafe(32)
+    try:
+        _SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _SESSION_FILE.write_text(_admin_session_token)
+        _SESSION_FILE.chmod(0o600)
+    except Exception as e:
+        logger.warning("Failed to persist session token: %s", e)
     return _admin_session_token
 
 
@@ -47,6 +66,14 @@ def validate_admin_session(token: str | None) -> bool:
 def clear_admin_session():
     global _admin_session_token
     _admin_session_token = None
+    try:
+        _SESSION_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+# Load persisted session on module import
+_load_session_token()
 
 
 async def check_auth_status() -> dict:
