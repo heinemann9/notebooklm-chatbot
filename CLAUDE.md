@@ -71,6 +71,10 @@ notebooklm auth check --test
 2. Frontend: API 함수 추가 (`lib/api.ts`) → 컴포넌트에서 호출 (try/catch + sonner toast)
 3. 인증이 필요없는 공개 API는 `api/widget.py`에 추가하고 `main.py` 미들웨어의 bypass 경로에 포함되는지 확인
 
+## Git Conventions
+
+- **Co-Authored-By 금지**: 커밋 메시지에 `Co-Authored-By` 라인을 포함하지 않는다
+
 ## Important Notes
 
 - **Next.js 버전 주의**: 이 프로젝트는 Next.js 16+를 사용하며 이전 버전과 breaking changes가 있음. 프론트엔드 수정 시 `node_modules/next/dist/docs/` 확인
