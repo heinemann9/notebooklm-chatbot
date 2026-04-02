@@ -127,7 +127,6 @@ export default function WidgetChatPage() {
   if (pageState === "select" && config) {
     return (
       <div className="flex flex-col h-screen bg-neutral-50">
-        <div className="fixed inset-0 bg-[linear-gradient(to_right,#00000008_1px,transparent_1px),linear-gradient(to_bottom,#00000008_1px,transparent_1px)] bg-[size:24px_24px]" />
 
         <div className="relative flex-1 flex items-center justify-center p-4">
           <div className="w-full max-w-md">

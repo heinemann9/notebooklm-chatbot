@@ -115,7 +115,6 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#00000008_1px,transparent_1px),linear-gradient(to_bottom,#00000008_1px,transparent_1px)] bg-[size:24px_24px]" />
 
       <header className="relative border-b border-neutral-200 bg-white/80 backdrop-blur-md sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-3">
