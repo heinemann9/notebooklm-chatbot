@@ -14,7 +14,8 @@ CORS_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:3100",
     "http://127.0.0.1:3100",
-    "http://172.30.1.83:3100",
+    "http://172.30.1.98:3100",
+    "https://0a23-220-76-41-89.ngrok-free.app",
 ]
 
 WIDGET_NOTEBOOK_ID = os.environ.get("WIDGET_NOTEBOOK_ID", "")
